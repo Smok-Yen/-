@@ -118,11 +118,41 @@
   }
   
   .app-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: 16px;
+    row-gap: 8px;
+    align-items: start;
     margin-bottom: 22px;
+  }
+
+  .header-brand {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .header-brand .tag {
+    margin-bottom: 6px;
+  }
+
+  .header-brand h1 {
+    margin: 0;
+  }
+
+  .app-header .header-controls {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+    align-self: start;
+  }
+
+  .app-header-subtitle {
+    grid-column: 1;
+    grid-row: 2;
+    margin: 0;
+    max-width: 100%;
   }
   
   .subtitle {
@@ -436,21 +466,26 @@
     }
   
     .app-header {
-      flex-direction: column;
-      align-items: stretch;
-      gap: 8px;
-      position: relative;
+      column-gap: 10px;
+      row-gap: 6px;
     }
 
-    .app-header > div:first-child {
-      width: 100%;
-      /* 為右上角的音樂播放器與小熊預留空間，避免文字被遮住 */
-      padding-right: 200px;
-      min-height: 44px;
+    /* 副標題橫跨整列，不再與播放器搶同一欄寬度，較不易被擠成兩行 */
+    .app-header-subtitle {
+      grid-column: 1 / -1;
+      font-size: 15px;
+      line-height: 1.5;
+      margin-top: 4px;
+      text-wrap: balance;
     }
 
-    .app-header > div:first-child .tag {
-      margin-bottom: 6px;
+    .header-brand .tag {
+      margin-bottom: 4px;
+    }
+
+    .app-header h1 {
+      font-size: 32px;
+      line-height: 1.15;
     }
 
     .bear-small {
@@ -460,12 +495,6 @@
     }
 
     .header-controls {
-      position: absolute;
-      top: 0;
-      right: 0;
-      width: auto;
-      justify-content: flex-end;
-      align-items: center;
       gap: 6px;
       flex-wrap: nowrap;
     }
