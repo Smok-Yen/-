@@ -436,34 +436,53 @@
     }
   
     .app-header {
-      flex-direction: column-reverse;
+      flex-direction: column;
       align-items: stretch;
-      gap: 12px;
+      gap: 8px;
+      position: relative;
     }
 
     .app-header > div:first-child {
       width: 100%;
+      /* 為右上角的音樂播放器與小熊預留空間，避免文字被遮住 */
+      padding-right: 200px;
+      min-height: 44px;
     }
-  
+
+    .app-header > div:first-child .tag {
+      margin-bottom: 6px;
+    }
+
     .bear-small {
-      font-size: 40px;
-      padding: 8px;
+      font-size: 30px;
+      padding: 6px;
+      border-radius: 14px;
     }
 
     .header-controls {
-      width: 100%;
+      position: absolute;
+      top: 0;
+      right: 0;
+      width: auto;
       justify-content: flex-end;
-      gap: 8px;
-      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: nowrap;
     }
 
     .music-player {
-      padding: 6px 10px;
+      padding: 5px 10px;
+      gap: 6px;
+    }
+
+    .music-btn {
+      font-size: 18px;
     }
 
     .music-select {
-      font-size: 13px;
-      max-width: 140px;
+      font-size: 12px;
+      max-width: 110px;
+      padding: 2px 0;
     }
   
     .home-grid {
