@@ -158,29 +158,16 @@ if (musicSelect && bgmAudio) {
 
   bgmAudio.src = musicSelect.value;
 
-  let savedWantPlay = false;
-  try {
-    savedWantPlay = localStorage.getItem(BGM_PLAYING_KEY) === "true";
-  } catch (e) {
-    savedWantPlay = false;
+  // 不論電腦或手機，一律不在頁面載入時自動播放，
+  // 必須由使用者按下音符按鈕才會開始播放（避免手機進站就響起音樂）。
+  isPlaying = false;
+  if (musicToggleBtn) {
+    musicToggleBtn.textContent = "🎵";
   }
-
-  if (savedWantPlay && musicToggleBtn) {
-    bgmAudio
-      .play()
-      .then(function () {
-        isPlaying = true;
-        musicToggleBtn.textContent = "⏸️";
-      })
-      .catch(function () {
-        isPlaying = false;
-        musicToggleBtn.textContent = "🎵";
-        try {
-          localStorage.setItem(BGM_PLAYING_KEY, "false");
-        } catch (e2) {
-          // 略過
-        }
-      });
+  try {
+    localStorage.setItem(BGM_PLAYING_KEY, "false");
+  } catch (e) {
+    // 略過
   }
 }
 
