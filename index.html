@@ -191,6 +191,58 @@
               placeholder="例如：我今天有點焦慮，覺得事情好多，好怕自己做不好……"
             ></textarea>
 
+            <div class="time-capsule-box" id="timeCapsuleBox">
+              <label class="time-capsule-header-toggle">
+                <input
+                  type="checkbox"
+                  id="timeCapsuleToggle"
+                  class="time-capsule-toggle-input"
+                />
+                <span class="time-capsule-switch" aria-hidden="true">
+                  <span class="time-capsule-switch-track">
+                    <span class="time-capsule-switch-thumb"></span>
+                  </span>
+                </span>
+                <span class="time-capsule-title">🕰️ 裝進時光膠囊</span>
+              </label>
+              <p class="time-capsule-hint">
+                讓好好熊幫你保管這份心情。你可以設定未來的某一天解鎖，或讓系統在一個月後為你隨機掉落驚喜。
+              </p>
+              <div
+                class="time-capsule-options"
+                id="timeCapsuleOptions"
+                role="region"
+                aria-labelledby="timeCapsuleToggle"
+                aria-hidden="true"
+              >
+                <div class="time-capsule-radio-row">
+                  <input
+                    type="radio"
+                    name="timeCapsuleMode"
+                    id="timeCapsuleModeRandom"
+                    value="random"
+                    checked
+                  />
+                  <label for="timeCapsuleModeRandom">隨機掉落 (至少沉澱一個月)</label>
+                </div>
+                <div class="time-capsule-radio-row">
+                  <input
+                    type="radio"
+                    name="timeCapsuleMode"
+                    id="timeCapsuleModeScheduled"
+                    value="scheduled"
+                  />
+                  <label for="timeCapsuleModeScheduled">指定解鎖日期</label>
+                </div>
+                <input
+                  type="date"
+                  id="timeCapsuleUnlockDate"
+                  class="time-capsule-date-hidden"
+                  aria-label="指定解鎖日期"
+                />
+              </div>
+            </div>
+
             <button type="submit" class="main-btn">送給好好熊</button>
           </form>
         </section>
@@ -218,6 +270,17 @@
   
       <button id="clearRecordsBtn" class="main-btn secondary-btn" type="button">
         清除全部紀錄
+      </button>
+    </section>
+
+    <section class="card time-capsule-corner" aria-label="時光膠囊秘密角落">
+      <h2>🔮 時光膠囊</h2>
+      <p class="time-capsule-corner-intro normal-text">
+        沉澱中的心情會在對的日子回到你手上，不急著一次看完也沒關係。
+      </p>
+      <div id="capsuleCornerContent" class="capsule-corner-content"></div>
+      <button id="clearCapsulesBtn" class="main-btn secondary-btn" type="button">
+        清除全部時光膠囊
       </button>
     </section>
   </main>
@@ -282,6 +345,31 @@
   </div>
 
   <audio id="bgmAudio" loop></audio>
+
+  <div
+    id="capsuleLetterModal"
+    class="capsule-letter-modal hidden"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="capsuleLetterModalTitle"
+  >
+    <div class="capsule-letter-modal-backdrop" tabindex="-1"></div>
+    <div class="capsule-letter-paper" id="capsuleLetterPaper">
+      <h3 id="capsuleLetterModalTitle" class="capsule-letter-heading">來自過去的信件</h3>
+      <p class="capsule-letter-bear-hint">
+        辛苦了，來看看幾個月前的你，想對現在的自己說些什麼吧！
+      </p>
+      <div class="capsule-letter-meta">
+        <span class="capsule-letter-meta-item">存放於：<time id="capsuleLetterStoredAt"></time></span>
+        <span class="capsule-letter-meta-item">解鎖日：<time id="capsuleLetterUnlockAt"></time></span>
+      </div>
+      <div id="capsuleLetterBody" class="capsule-letter-body"></div>
+      <button type="button" id="capsuleLetterCloseBtn" class="capsule-letter-close-btn">
+        放回心裡
+      </button>
+    </div>
+  </div>
+
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script src="script.js"></script>
 </body>

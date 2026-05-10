@@ -22,6 +22,13 @@ const resultContent = document.getElementById("resultContent");
 const chatForm = document.getElementById("chatForm");
 const chatResultSection = document.getElementById("chatResultSection");
 const chatResultContent = document.getElementById("chatResultContent");
+const timeCapsuleBox = document.getElementById("timeCapsuleBox");
+const timeCapsuleToggle = document.getElementById("timeCapsuleToggle");
+const timeCapsuleOptions = document.getElementById("timeCapsuleOptions");
+const timeCapsuleUnlockDate = document.getElementById("timeCapsuleUnlockDate");
+const timeCapsuleModeRadios = document.querySelectorAll(
+  'input[name="timeCapsuleMode"]'
+);
 
 const settingsForm = document.getElementById("settingsForm");
 const settingsMessage = document.getElementById("settingsMessage");
@@ -29,11 +36,18 @@ const settingsMessage = document.getElementById("settingsMessage");
 const reviewContent = document.getElementById("reviewContent");
 const permaChartCanvas = document.getElementById("permaChart");
 const clearRecordsBtn = document.getElementById("clearRecordsBtn");
+const clearCapsulesBtn = document.getElementById("clearCapsulesBtn");
 const RECORDS_KEY = "goodThingsRecords";
+const CAPSULES_KEY = "timeCapsuleWhispers";
+const LAST_OPENED_RANDOM_CAPSULE_DATE_KEY = "lastOpenedRandomCapsuleDate";
 const PERMA_PALETTE_KEY = "permaChartPaletteKey";
 const BGM_TRACK_KEY = "goodBearBgmTrack";
 const BGM_PLAYING_KEY = "goodBearBgmPlaying";
 const LIFF_ID = "2009972717-AHG9Uiv8";
+const RANDOM_MIN_DAYS = 30;
+const RANDOM_MAX_DAYS = 90;
+const COLLISION_SEARCH_STEP_DAYS = 7;
+const MAX_WAIT_DAYS = 180;
 let permaChartInstance = null;
 const permaChartPalettes = {
   warm: ["#E7A7C3", "#F3C7D9", "#D8B9E8", "#C7B6E6", "#BFA7D8"],
@@ -100,6 +114,75 @@ function updateTodayInfo() {
     const day = String(now.getDate()).padStart(2, "0");
   
     return `${year}-${month}-${day}`;
+  }
+
+  function getTomorrowInputValue() {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  }
+
+  function applyTimeCapsuleDateConstraints() {
+    if (!timeCapsuleUnlockDate) {
+      return;
+    }
+    const tomorrow = getTomorrowInputValue();
+    timeCapsuleUnlockDate.min = tomorrow;
+    timeCapsuleUnlockDate.value = tomorrow;
+  }
+
+  function updateTimeCapsuleOptionsVisibility() {
+    if (!timeCapsuleBox || !timeCapsuleOptions || !timeCapsuleToggle) {
+      return;
+    }
+    const expanded = timeCapsuleToggle.checked === true;
+    if (expanded) {
+      timeCapsuleBox.classList.add("is-expanded");
+      timeCapsuleOptions.setAttribute("aria-hidden", "false");
+    } else {
+      timeCapsuleBox.classList.remove("is-expanded");
+      timeCapsuleOptions.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function updateTimeCapsuleDateFieldVisibility() {
+    if (!timeCapsuleUnlockDate) {
+      return;
+    }
+    const selected = document.querySelector(
+      'input[name="timeCapsuleMode"]:checked'
+    );
+    if (selected && selected.value === "scheduled") {
+      applyTimeCapsuleDateConstraints();
+      timeCapsuleUnlockDate.classList.remove("time-capsule-date-hidden");
+    } else {
+      timeCapsuleUnlockDate.classList.add("time-capsule-date-hidden");
+    }
+  }
+
+  if (
+    timeCapsuleToggle &&
+    timeCapsuleBox &&
+    timeCapsuleOptions &&
+    timeCapsuleUnlockDate
+  ) {
+    applyTimeCapsuleDateConstraints();
+    updateTimeCapsuleOptionsVisibility();
+    updateTimeCapsuleDateFieldVisibility();
+
+    timeCapsuleToggle.addEventListener("change", function () {
+      updateTimeCapsuleOptionsVisibility();
+    });
+
+    timeCapsuleModeRadios.forEach(function (radio) {
+      radio.addEventListener("change", function () {
+        updateTimeCapsuleDateFieldVisibility();
+      });
+    });
   }
   
   function setDefaultRecordDate() {
@@ -259,6 +342,7 @@ function showSection(sectionId) {
 
   if (sectionId === "reviewSection") {
     renderReview();
+    renderTimeCapsuleCorner();
   }
   
   window.scrollTo({
@@ -340,10 +424,118 @@ form.addEventListener("submit", function (event) {
   setDefaultRecordDate();
 });
 
+function formatDateToYmd(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getTimeCapsuleRecords() {
+  const raw = localStorage.getItem(CAPSULES_KEY);
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveTimeCapsuleRecords(records) {
+  localStorage.setItem(CAPSULES_KEY, JSON.stringify(records));
+}
+
+function getUsedUnlockDateSet(records) {
+  const used = new Set();
+  records.forEach(function (record) {
+    if (record && typeof record.unlockDate === "string" && record.unlockDate) {
+      used.add(record.unlockDate);
+    }
+  });
+  return used;
+}
+
+function getRandomIntInRange(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function findAvailableDateBySevenDayBlocks(startDate, usedDates, maxDate) {
+  const searchStart = new Date(startDate);
+  const max = new Date(maxDate);
+  let blockStart = new Date(searchStart);
+
+  while (blockStart <= max) {
+    for (let i = 0; i < COLLISION_SEARCH_STEP_DAYS; i += 1) {
+      const candidate = new Date(blockStart);
+      candidate.setDate(blockStart.getDate() + i);
+      if (candidate > max) {
+        return null;
+      }
+      const ymd = formatDateToYmd(candidate);
+      if (!usedDates.has(ymd)) {
+        return ymd;
+      }
+    }
+    blockStart.setDate(blockStart.getDate() + COLLISION_SEARCH_STEP_DAYS);
+  }
+
+  return null;
+}
+
+function generateRandomUnlockDateWithCap(records) {
+  const usedDates = getUsedUnlockDateSet(records);
+  const today = new Date();
+  const candidate = new Date(today);
+  candidate.setDate(today.getDate() + getRandomIntInRange(RANDOM_MIN_DAYS, RANDOM_MAX_DAYS));
+  const maxDate = new Date(today);
+  maxDate.setDate(today.getDate() + MAX_WAIT_DAYS);
+
+  return findAvailableDateBySevenDayBlocks(candidate, usedDates, maxDate);
+}
+
+function formatUnlockDateForMessage(ymd) {
+  if (!ymd) {
+    return "";
+  }
+  const d = new Date(ymd + "T00:00:00");
+  return d.toLocaleDateString("zh-TW", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long"
+  });
+}
+
+function getSelectedTimeCapsuleMode() {
+  const selected = document.querySelector('input[name="timeCapsuleMode"]:checked');
+  return selected ? selected.value : "random";
+}
+
+function resetChatCapsuleFormState() {
+  const chatInputEl = document.getElementById("chatInput");
+  if (chatInputEl) {
+    chatInputEl.value = "";
+  }
+  if (timeCapsuleToggle) {
+    timeCapsuleToggle.checked = false;
+  }
+  const randomRadio = document.getElementById("timeCapsuleModeRandom");
+  if (randomRadio) {
+    randomRadio.checked = true;
+  }
+  applyTimeCapsuleDateConstraints();
+  updateTimeCapsuleOptionsVisibility();
+  updateTimeCapsuleDateFieldVisibility();
+}
+
 chatForm.addEventListener("submit", function (event) {
   event.preventDefault();
 
-  const chatInput = document.getElementById("chatInput").value.trim();
+  const chatInputElement = document.getElementById("chatInput");
+  const chatInput = chatInputElement.value.trim();
 
   if (!chatInput) {
     alert("可以先寫下一點點心情，好好熊才知道怎麼陪你喔!");
@@ -351,13 +543,78 @@ chatForm.addEventListener("submit", function (event) {
   }
 
   const chatMessage = generateAIResponse(chatInput);
-
-  chatResultContent.innerHTML = `
+  let resultHtml = `
     <div class="ai-response">
       <div class="ai-title">🧸 好好熊聽見了</div>
       ${chatMessage}
     </div>
   `;
+
+  if (timeCapsuleToggle && timeCapsuleToggle.checked === true) {
+    const records = getTimeCapsuleRecords();
+    const now = new Date();
+    const mode = getSelectedTimeCapsuleMode();
+    let capsuleType = mode === "scheduled" ? "scheduled" : "random";
+    let unlockDate = "";
+
+    if (capsuleType === "scheduled") {
+      unlockDate = timeCapsuleUnlockDate ? timeCapsuleUnlockDate.value : "";
+      if (!unlockDate) {
+        unlockDate = getTomorrowInputValue();
+      }
+    } else {
+      unlockDate = generateRandomUnlockDateWithCap(records);
+    }
+
+    if (capsuleType === "random" && !unlockDate) {
+      resultHtml += `
+        <div class="ai-response">
+          <div class="ai-title">🧸 時光膠囊小提醒</div>
+          <div class="ai-block">目前隨機掉落時段已滿，請改用指定解鎖日期。</div>
+        </div>
+      `;
+    } else {
+      const storedDate = formatDateToYmd(now);
+      const storedTime = now.toLocaleTimeString("zh-TW", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      });
+      const capsuleRecord = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        message: chatInput,
+        createdAt: now.toISOString(),
+        storedDate: storedDate,
+        storedTime: storedTime,
+        unlockDate: unlockDate,
+        capsuleType: capsuleType,
+        isOpened: false,
+        openedAt: null
+      };
+      records.push(capsuleRecord);
+      saveTimeCapsuleRecords(records);
+
+      if (capsuleType === "scheduled") {
+        resultHtml += `
+          <div class="ai-response">
+            <div class="ai-title">🕰️ 時光膠囊已封存</div>
+            <div class="ai-block">好好熊已經把這份心情小心翼翼地收進膠囊，並且上鎖囉！我們約好在 ${escapeHtml(formatUnlockDateForMessage(unlockDate))} 那天一起打開它。</div>
+          </div>
+        `;
+      } else {
+        resultHtml += `
+          <div class="ai-response">
+            <div class="ai-title">🕰️ 時光膠囊已封存</div>
+            <div class="ai-block">好好熊已經把這份心情放進時間長河裡沉澱囉！它會在未來某個驚喜日子回到你身邊!</div>
+          </div>
+        `;
+      }
+
+      resetChatCapsuleFormState();
+    }
+  }
+
+  chatResultContent.innerHTML = resultHtml;
 
   chatResultSection.classList.remove("hidden");
   chatResultSection.scrollIntoView({ behavior: "smooth" });
@@ -687,6 +944,317 @@ function escapeHtml(text) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+function getLastOpenedRandomCapsuleDate() {
+  try {
+    const v = localStorage.getItem(LAST_OPENED_RANDOM_CAPSULE_DATE_KEY);
+    return v || "";
+  } catch (e) {
+    return "";
+  }
+}
+
+function setLastOpenedRandomCapsuleDate(ymd) {
+  try {
+    localStorage.setItem(LAST_OPENED_RANDOM_CAPSULE_DATE_KEY, ymd);
+  } catch (e) {
+    // 略過
+  }
+}
+
+function compareYmdStrings(a, b) {
+  if (a === b) {
+    return 0;
+  }
+  return a < b ? -1 : 1;
+}
+
+function formatCapsuleStoredAtForDisplay(record) {
+  let dateFormatted = "";
+  if (record.storedDate && typeof record.storedDate === "string") {
+    dateFormatted = formatUnlockDateForMessage(record.storedDate);
+  }
+  const timePart = record.storedTime ? String(record.storedTime).trim() : "";
+  let out = "";
+  if (dateFormatted) {
+    out = dateFormatted;
+  }
+  if (timePart) {
+    out = out ? `${out} ${timePart}` : timePart;
+  }
+  if (out) {
+    return out;
+  }
+  if (record.createdAt) {
+    const dt = new Date(record.createdAt);
+    if (!Number.isNaN(dt.getTime())) {
+      return dt.toLocaleString("zh-TW");
+    }
+  }
+  return "—";
+}
+
+function renderTimeCapsuleCorner() {
+  const root = document.getElementById("capsuleCornerContent");
+  if (!root) {
+    return;
+  }
+
+  const todayYmd = formatDateToYmd(new Date());
+  const records = getTimeCapsuleRecords();
+  const unopened = records.filter(function (r) {
+    return r && r.isOpened !== true;
+  });
+
+  if (unopened.length === 0) {
+    root.innerHTML = `
+      <div class="capsule-card-empty">
+        <div class="capsule-card-empty-emoji" role="img" aria-label="空的時光膠囊">📦</div>
+        <p class="capsule-card-empty-text">
+          目前沒有沉澱中的心情。下次試著把想對未來自己說的話裝進來吧！
+        </p>
+      </div>
+    `;
+    return;
+  }
+
+  const lastRandomOpenDay = getLastOpenedRandomCapsuleDate();
+  const cooldownToday = lastRandomOpenDay === todayYmd;
+
+  function isDue(r) {
+    return r.unlockDate && compareYmdStrings(r.unlockDate, todayYmd) <= 0;
+  }
+
+  const scheduled = [];
+  const randomCaps = [];
+
+  unopened.forEach(function (r) {
+    if (r.capsuleType === "scheduled") {
+      scheduled.push(r);
+    } else {
+      randomCaps.push(r);
+    }
+  });
+
+  const dueRandom = randomCaps.filter(isDue).sort(function (a, b) {
+    const cmp = compareYmdStrings(String(a.unlockDate), String(b.unlockDate));
+    if (cmp !== 0) {
+      return cmp;
+    }
+    const ca = String(a.createdAt || "");
+    const cb = String(b.createdAt || "");
+    return ca.localeCompare(cb);
+  });
+
+  let readyRandomId = null;
+  if (!cooldownToday && dueRandom.length > 0) {
+    readyRandomId = dueRandom[0].id;
+  }
+
+  const fragmentsReady = [];
+  const fragmentsSettling = [];
+
+  scheduled.sort(function (a, b) {
+    return compareYmdStrings(String(a.unlockDate), String(b.unlockDate));
+  });
+  scheduled.forEach(function (cap) {
+    if (isDue(cap)) {
+      fragmentsReady.push({
+        unlockYmd: String(cap.unlockDate),
+        html: `
+          <button type="button" class="capsule-card-ready"
+            data-capsule-id="${escapeHtml(cap.id)}"
+          >
+            <div class="capsule-card-ready-text">✨ 有一封信件已經送達，點擊拆開它</div>
+            <div class="capsule-card-ready-sub">指定解鎖 · ${escapeHtml(formatUnlockDateForMessage(cap.unlockDate))}</div>
+          </button>
+        `
+      });
+    } else {
+      fragmentsSettling.push({
+        unlockYmd: String(cap.unlockDate),
+        html: `
+          <div class="capsule-card-settling">
+            <div class="capsule-card-settling-title">🔒 沉澱中</div>
+            <div>約好在未來：<strong>${escapeHtml(formatUnlockDateForMessage(cap.unlockDate))}</strong> 和你一起打開這份心事。</div>
+            <div class="capsule-card-settling-muted">再等等就好，時間會帶你到那天。</div>
+          </div>
+        `
+      });
+    }
+  });
+
+  randomCaps.sort(function (a, b) {
+    return compareYmdStrings(String(a.unlockDate), String(b.unlockDate));
+  });
+  randomCaps.forEach(function (cap) {
+    if (!isDue(cap)) {
+      fragmentsSettling.push({
+        unlockYmd: String(cap.unlockDate),
+        html: `
+          <div class="capsule-card-settling">
+            <div class="capsule-card-settling-title">⏳ 在時間長河裡漂流中...</div>
+            <div class="capsule-card-settling-muted">
+              還在等待屬於你的驚喜日子，請再給這份心情一些慢慢沉澱的時間。
+            </div>
+          </div>
+        `
+      });
+    } else if (cap.id === readyRandomId) {
+      fragmentsReady.push({
+        unlockYmd: String(cap.unlockDate),
+        html: `
+          <button type="button" class="capsule-card-ready"
+            data-capsule-id="${escapeHtml(cap.id)}"
+          >
+            <div class="capsule-card-ready-text">✨ 有一封信件已經送達，點擊拆開它</div>
+            <div class="capsule-card-ready-sub">來自時間長河的驚喜</div>
+          </button>
+        `
+      });
+    } else {
+      let extraMsg =
+        "還有其他驚喜在長河裡排隊，好好熊會慢慢把它們送回你身旁。";
+      if (cooldownToday) {
+        extraMsg =
+          "今天你已在長河裡接住一封驚喜囉！好好熊請你好好休息，明天再來看看下一封。";
+      }
+      fragmentsSettling.push({
+        unlockYmd: String(cap.unlockDate),
+        html: `
+          <div class="capsule-card-settling">
+            <div class="capsule-card-settling-title">⏳ 在時間長河裡漂流中...</div>
+            <div class="capsule-card-settling-muted">${escapeHtml(extraMsg)}</div>
+          </div>
+        `
+      });
+    }
+  });
+
+  fragmentsReady.sort(function (a, b) {
+    return compareYmdStrings(String(a.unlockYmd || ""), String(b.unlockYmd || ""));
+  });
+
+  fragmentsSettling.sort(function (a, b) {
+    const ua = String(a.unlockYmd || "9999-99-99");
+    const ub = String(b.unlockYmd || "9999-99-99");
+    return compareYmdStrings(ua, ub);
+  });
+
+  const readyBlocks = fragmentsReady.map(function (f) {
+    return f.html;
+  });
+  const settlingBlocks = fragmentsSettling.map(function (f) {
+    return f.html;
+  });
+
+  root.innerHTML = readyBlocks.concat(settlingBlocks).join("");
+}
+
+function openCapsuleLetter(capsuleId) {
+  if (!capsuleId) {
+    return;
+  }
+
+  const records = getTimeCapsuleRecords();
+  const cap = records.find(function (r) {
+    return r && String(r.id) === String(capsuleId);
+  });
+
+  if (!cap || cap.isOpened === true) {
+    renderTimeCapsuleCorner();
+    return;
+  }
+
+  const modal = document.getElementById("capsuleLetterModal");
+  const storedAtEl = document.getElementById("capsuleLetterStoredAt");
+  const unlockEl = document.getElementById("capsuleLetterUnlockAt");
+  const bodyEl = document.getElementById("capsuleLetterBody");
+
+  if (!modal || !storedAtEl || !unlockEl || !bodyEl) {
+    return;
+  }
+
+  storedAtEl.textContent = formatCapsuleStoredAtForDisplay(cap);
+  unlockEl.textContent = formatUnlockDateForMessage(cap.unlockDate);
+  bodyEl.textContent = cap.message ? String(cap.message) : "";
+
+  const openedAtIso = new Date().toISOString();
+  records.forEach(function (r, index) {
+    if (r && String(r.id) === String(capsuleId)) {
+      records[index] = Object.assign({}, r, {
+        isOpened: true,
+        openedAt: openedAtIso
+      });
+    }
+  });
+  saveTimeCapsuleRecords(records);
+
+  if (cap.capsuleType === "random") {
+    setLastOpenedRandomCapsuleDate(formatDateToYmd(new Date()));
+  }
+
+  modal.classList.remove("hidden");
+  document.documentElement.style.overflow = "hidden";
+}
+
+function closeCapsuleLetterModal() {
+  const modal = document.getElementById("capsuleLetterModal");
+  if (modal) {
+    modal.classList.add("hidden");
+  }
+  document.documentElement.style.overflow = "";
+  renderTimeCapsuleCorner();
+}
+
+function initCapsuleLetterModalListeners() {
+  const corner = document.getElementById("capsuleCornerContent");
+  const modal = document.getElementById("capsuleLetterModal");
+  const closeBtn = document.getElementById("capsuleLetterCloseBtn");
+  const backdrop = modal ? modal.querySelector(".capsule-letter-modal-backdrop") : null;
+  const paper = document.getElementById("capsuleLetterPaper");
+
+  if (corner) {
+    corner.addEventListener("click", function (e) {
+      const btn = e.target.closest("[data-capsule-id]");
+      if (!btn || !btn.matches(".capsule-card-ready")) {
+        return;
+      }
+      const idAttr = btn.getAttribute("data-capsule-id");
+      if (!idAttr) {
+        return;
+      }
+      openCapsuleLetter(idAttr);
+    });
+  }
+
+  if (closeBtn) {
+    closeBtn.addEventListener("click", function () {
+      closeCapsuleLetterModal();
+    });
+  }
+
+  if (backdrop && paper) {
+    backdrop.addEventListener("click", function () {
+      closeCapsuleLetterModal();
+    });
+    paper.addEventListener("click", function (e) {
+      e.stopPropagation();
+    });
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      const modalEl = document.getElementById("capsuleLetterModal");
+      if (modalEl && !modalEl.classList.contains("hidden")) {
+        closeCapsuleLetterModal();
+      }
+    }
+  });
+}
+
+initCapsuleLetterModalListeners();
+
 function saveGoodThingsRecord(good1, good2, good3, perma1, perma2, perma3, recordDate) {
     const records = getGoodThingsRecords();
   
@@ -1144,6 +1712,27 @@ function getGoodThingData(goodThing) {
     localStorage.removeItem(RECORDS_KEY);
     renderReview();
   });
+
+  if (clearCapsulesBtn) {
+    clearCapsulesBtn.addEventListener("click", function () {
+      const confirmClear = confirm(
+        "確定要清除全部時光膠囊嗎？包含已封存與未開啟的心情，清除後就不能恢復囉。"
+      );
+
+      if (!confirmClear) {
+        return;
+      }
+
+      try {
+        localStorage.removeItem(CAPSULES_KEY);
+        localStorage.removeItem(LAST_OPENED_RANDOM_CAPSULE_DATE_KEY);
+      } catch (e) {
+        // 略過（例如隱私模式）
+      }
+
+      renderTimeCapsuleCorner();
+    });
+  }
   function formatRecordDate(dateString) {
     if (!dateString) {
       return new Date().toLocaleDateString("zh-TW");
